@@ -1,0 +1,3 @@
+google-cloud-spanner==3.26.0
+futures==3.4.0; python_version < "3"
+python-dotenv

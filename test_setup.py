@@ -8,8 +8,8 @@ load_dotenv()  # take environment variables from .env.
 
 def create_database(instance_id, database_id):
     """Creates a database and tables for sample data."""
-    spanner_client = spanner.Client() # deplicate - remove later?
-    instance = spanner_client.instance(instance_id)
+    #spanner_client = spanner.Client() # deplicate - remove later?
+    #instance = spanner_client.instance(instance_id)
 
     database = instance.database(
         database_id,
@@ -27,14 +27,28 @@ def create_database(instance_id, database_id):
 
     print("Created database {} on instance {}".format(database_id, instance_id))
 
+def increment_zone_count(zone_id):
+    pass
+
+def test_insert(transaction):
+    row_ct = transaction.execute_update(
+        "INSERT INTO ZoneCounter (ZoneId, Count) VALUES "
+        "('us-central1-a', 15), "
+        "('us-west2-b', 14), "
+        "('unknown', 105) "
+    )
+    print("{} record(s) inserted.".format(row_ct))
+
 
 # check to see if we need to create database
 spanner_client = spanner.Client()
 instance = spanner_client.instance(os.getenv("SPANNER_INSTANCE"))
 if instance.database(os.getenv("DATABASE_ID")).exists():
-    print(f'Database {os.getenv("DATABASE_ID")} found on Spanner instance {os.getenv("SPANNER_INSTANCE")}. Continuing...')
+    print("Database {} found on Spanner instance {}. Continuing...".format(os.getenv("DATABASE_ID"),os.getenv("SPANNER_INSTANCE")))
 
 else:
-    print(f'Database {os.getenv("DATABASE_ID")} not found on Spanner instance {os.getenv("SPANNER_INSTANCE")}. Attempting to create...')
+    print("Database {} not found on Spanner instance {}. Attempting to create...".format(os.getenv("DATABASE_ID"),os.getenv("SPANNER_INSTANCE")))
     create_database(os.getenv("SPANNER_INSTANCE"), os.getenv("DATABASE_ID"))
 
+database = instance.database(os.getenv("DATABASE_ID"))
+database.run_in_transaction(test_insert)

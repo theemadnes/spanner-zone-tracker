@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
 from google.cloud import pubsub_v1
-from concurrent.futures import TimeoutError
+from concurrent.futures import TimeoutError, ThreadPoolExecutor
+import json
+from collections import defaultdict
 
 load_dotenv()  # take environment variables from .env
 
@@ -9,17 +11,30 @@ load_dotenv()  # take environment variables from .env
 project_id = os.getenv("PROJECT_ID")
 subscription_id = os.getenv("SUB_ID")
 # Number of seconds the subscriber should listen for messages
-timeout = float(os.getenv("TIMEOUT", 5.0))
+if os.getenv("TIMEOUT", None):
+    timeout = float(os.getenv("TIMEOUT"))
+    print(f'Running with timeout of {timeout} seconds.')
+else:
+    timeout = None
+    print("Running with no timeout.")
+max_messages = int(os.getenv("MAX_MESSAGES", 10))
 
 subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(project_id, subscription_id)
 
+zone_count = defaultdict(lambda: 0) # tracks counts per zone
+executor = ThreadPoolExecutor(10)
+
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     print(f"Received {message.data!r}.")
-    message.ack()
+    #print(json.loads(message.data.decode())['zone'])
+    zone_count[json.loads(message.data.decode())['zone']] += 1
+    print(zone_count)
+    #message.ack()
+    future = executor.submit(message.ack(), ("Completed"))
 
 # Limit the subscriber to only have ten outstanding messages at a time.
-flow_control = pubsub_v1.types.FlowControl(max_messages=10)
+flow_control = pubsub_v1.types.FlowControl(max_messages=max_messages)
 
 streaming_pull_future = subscriber.subscribe(
     subscription_path, callback=callback, flow_control=flow_control

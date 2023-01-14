@@ -3,3 +3,4 @@ python-dotenv
 uvicorn[standard]
 emoji==2.2.0
 httpx
+google-cloud-pubsub

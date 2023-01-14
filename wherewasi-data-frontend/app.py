@@ -7,6 +7,9 @@ import logging
 from logging.config import dictConfig
 from dotenv import load_dotenv
 import frontend_payload
+from google.cloud import pubsub_v1
+#from concurrent.futures import ThreadPoolExecutor
+
 
 load_dotenv()  # take environment variables from .env
 
@@ -42,17 +45,28 @@ class PrettyJSONResponse(Response):
             separators=(", ", ": "),
         ).encode("utf-8")
 
+# create pubsub client
+publisher = pubsub_v1.PublisherClient()
+topic_path = publisher.topic_path(os.getenv("PROJECT_ID"), os.getenv("TOPIC_ID"))
+
+# create web server
 app = FastAPI()
 
 @app.get("/healthz")
 async def i_am_healthy():
     return ('OK')
 
+#@app.get("/")#, response_class=PrettyJSONResponse)
 @app.get("/", response_class=PrettyJSONResponse)
 async def read_root():
-    #return {"Hello": "World"}
-    payload = frontend_payload.FrontendPayload()
-    return payload.build_payload()
+    #generate payload
+    payload = frontend_payload.FrontendPayload().build_payload()
+
+    # publish to pubsub topic
+    future = publisher.publish(topic_path, json.dumps(payload).encode("utf-8"))
+    #print(future.result()) # fire and forget
+
+    return payload
 
 if __name__ == '__main__':
 

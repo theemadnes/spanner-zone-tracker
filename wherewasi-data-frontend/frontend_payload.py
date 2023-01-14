@@ -39,6 +39,32 @@ class FrontendPayload(object):
 
     def build_payload(self):
 
+        # grab info from GCE metadata
+        try:
+            #with httpx.Client() as client:
+            r = httpx.get(METADATA_URL + '?recursive=true',
+                                headers=METADATA_HEADERS)
+            # get project / zone info
+            self.payload['project_id'] = r.json()['project']['projectId']
+            self.payload['zone'] = r.json()['instance']['zone'].split('/')[-1]
+
+            # if we're running in GKE, we can also get cluster name
+            try:
+                self.payload['cluster_name'] = r.json()['instance']['attributes']['cluster-name']
+            except:
+                logging.warning("Unable to capture GKE cluster name.")
+            try:
+                    self.payload['gce_instance_id'] = r.json()['instance']['id']
+            except:
+                logging.warning("Unable to capture GCE instance ID.")
+            try:
+                self.payload['gce_service_account'] = r.json()['instance']['serviceAccounts']['default']['email']
+            except:
+                logging.warning("Unable to capture GCE service account.")
+        except:
+            logging.warning("Unable to access GCE metadata endpoint.")
+            self.payload['zone'] = "unknown" # default value
+
         # get pod name, emoji & datetime
         self.payload['pod_name'] = socket.gethostname()
         self.payload['pod_name_emoji'] = emoji_list[hash(
@@ -68,27 +94,5 @@ class FrontendPayload(object):
             self.payload['metadata'] = os.getenv('METADATA')
         else:
             logging.warning("Unable to capture metadata.")
-        
-        # grab info from GCE metadata
-        #try:
-        r = httpx.get(METADATA_URL + '?recursive=true',
-                            headers=METADATA_HEADERS)
-        # get project / zone info
-        self.payload['project_id'] = r.json()['project']['projectId']
-        self.payload['zone'] = r.json()['instance']['zone'].split('/')[-1]
-
-        # if we're running in GKE, we can also get cluster name
-        try:
-            self.payload['cluster_name'] = r.json()['instance']['attributes']['cluster-name']
-        except:
-            logging.warning("Unable to capture GKE cluster name.")
-        # if we're running on Cloud Run, grab the container instance ID and Google service account
-        try:
-            self.payload['cloud_run_instance_id'] = r.json()['instance']['id']
-            self.payload['cloud_run_service_account'] = r.json()['instance']['serviceAccounts']['default']['email']
-        except:
-            logging.warning("Unable to capture Cloud Run metadata.")
-        #except:
-        #    logging.warning("Unable to access GCE metadata endpoint.")
 
         return self.payload

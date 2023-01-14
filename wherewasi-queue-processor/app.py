@@ -26,6 +26,16 @@ subscription_path = subscriber.subscription_path(project_id, subscription_id)
 spanner_client = spanner.Client()
 instance = spanner_client.instance(os.getenv("INSTANCE_ID"))
 database = instance.database(os.getenv("DATABASE_ID"))
+table = os.getenv("TABLE_ID")
+print(f"Spanner instance: {instance.name}\nSpanner database: {database.name}\nSpanner table: {table}")
+
+def insert_zone_metrics(transaction):
+    row_ct = transaction.insert(
+        table,
+        columns=['zone', 'hits'],
+        values=[[key, value] for key, value in zone_count.items()],
+    )
+    print("{} record(s) inserted.".format(len(zone_count)))
 
 zone_count = defaultdict(lambda: 0) # tracks counts per zone
 executor = ThreadPoolExecutor(10)
@@ -53,5 +63,7 @@ with subscriber:
         # unless an exception is encountered first.
         streaming_pull_future.result(timeout=timeout)
     except TimeoutError:
+        # write to the database
+        database.run_in_transaction(insert_zone_metrics)
         streaming_pull_future.cancel()  # Trigger the shutdown.
         streaming_pull_future.result()  # Block until the shutdown is complete.

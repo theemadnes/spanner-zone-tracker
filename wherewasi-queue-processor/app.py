@@ -5,6 +5,8 @@ from concurrent.futures import TimeoutError, ThreadPoolExecutor
 import json
 from collections import defaultdict
 from google.cloud import spanner
+from google.cloud.spanner_dbapi.connection import connect
+
 
 load_dotenv()  # take environment variables from .env
 
@@ -29,20 +31,52 @@ database = instance.database(os.getenv("DATABASE_ID"))
 table = os.getenv("TABLE_ID")
 print(f"Spanner instance: {instance.name}\nSpanner database: {database.name}\nSpanner table: {table}")
 
+# use connection API to get existing records
+connection = connect(os.getenv("INSTANCE_ID"), os.getenv("DATABASE_ID"))
+connection.autocommit = True
+
+cursor = connection.cursor()
+cursor.execute(f"SELECT * FROM {table}")
+
+current_data = cursor.fetchall()
+current_data_dict = dict(current_data) #list_to_dict(current_data)
+
+updates = {}
+new_data = {}
+
 def insert_zone_metrics(transaction):
-    row_ct = transaction.insert(
-        table,
-        columns=['zone', 'hits'],
-        values=[[key, value] for key, value in zone_count.items()],
-    )
-    print("{} record(s) inserted.".format(len(zone_count)))
+
+    for k in current_data_dict.keys():
+        if k in zone_count.keys():
+            updates[k] = current_data_dict[k] + zone_count[k]
+
+    for j in zone_count.keys():
+        if j not in current_data_dict.keys():
+            new_data[j] = zone_count[j]
+
+    if len(new_data):
+    
+        row_ct = transaction.insert(
+            table,
+            columns=['zone', 'hits'],
+            values=[[key, value] for key, value in new_data.items()],
+        )
+        print("{} new record(s) inserted.".format(len(new_data)))
+
+    if len(updates):
+
+        row_in = transaction.update(
+            table,
+            columns=['zone', 'hits'],
+            values=[[key, value] for key, value in updates.items()],
+        )
+        print("{} record(s) updated.".format(len(updates)))
 
 zone_count = defaultdict(lambda: 0) # tracks counts per zone
 executor = ThreadPoolExecutor(10)
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     print(f"Received {message.data!r}.")
-    #print(json.loads(message.data.decode())['zone'])
     zone_count[json.loads(message.data.decode())['zone']] += 1
     print(dict(zone_count))
     #message.ack()
@@ -63,7 +97,6 @@ with subscriber:
         # unless an exception is encountered first.
         streaming_pull_future.result(timeout=timeout)
     except TimeoutError:
-        # write to the database
-        database.run_in_transaction(insert_zone_metrics)
+        database.run_in_transaction(insert_zone_metrics) # write to the database before shutdown
         streaming_pull_future.cancel()  # Trigger the shutdown.
         streaming_pull_future.result()  # Block until the shutdown is complete.

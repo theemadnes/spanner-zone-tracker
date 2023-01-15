@@ -4,3 +4,4 @@ uvicorn[standard]
 emoji==2.2.0
 httpx
 google-cloud-pubsub
+google-cloud-spanner

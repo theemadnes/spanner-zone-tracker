@@ -52,6 +52,9 @@ topic_path = publisher.topic_path(os.getenv("PROJECT_ID"), os.getenv("TOPIC_ID")
 # create web server
 app = FastAPI()
 
+# create payload object
+payload_obj = frontend_payload.FrontendPayload()
+
 @app.get("/healthz")
 async def i_am_healthy():
     return ('OK')
@@ -60,7 +63,7 @@ async def i_am_healthy():
 @app.get("/", response_class=PrettyJSONResponse)
 async def read_root():
     #generate payload
-    payload = frontend_payload.FrontendPayload().build_payload()
+    payload = payload_obj.build_payload()
 
     # publish to pubsub topic
     future = publisher.publish(topic_path, json.dumps(payload).encode("utf-8"))

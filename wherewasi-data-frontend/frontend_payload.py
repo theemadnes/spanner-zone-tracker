@@ -6,9 +6,14 @@ import sys
 import os
 import socket
 import httpx
+from google.cloud import spanner
+from google.cloud.spanner_dbapi.connection import connect
+from dotenv import load_dotenv
 
 METADATA_URL = 'http://metadata.google.internal/computeMetadata/v1/'
 METADATA_HEADERS = {'Metadata-Flavor': 'Google'}
+
+load_dotenv()  # take environment variables from .env
 
 # set up logging
 '''
@@ -36,8 +41,17 @@ class FrontendPayload(object):
     def __init__(self):
 
         self.payload = {}
+        # use connection API to connect to Spanner
+        self.connection = connect(os.getenv("INSTANCE_ID"), os.getenv("DATABASE_ID"))
+        self.connection.autocommit = True
+        self.cursor = self.connection.cursor()
 
     def build_payload(self):
+
+        self.payload['zone_hits'] = {}
+        self.cursor.execute(f'SELECT * FROM {os.getenv("TABLE_ID")}')
+        current_data = self.cursor.fetchall()
+        self.payload['zone_hits'] = dict(current_data)
 
         # grab info from GCE metadata
         try:

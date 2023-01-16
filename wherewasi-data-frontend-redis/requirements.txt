@@ -1,0 +1,6 @@
+fastapi
+python-dotenv
+uvicorn[standard]
+emoji==2.2.0
+httpx
+redis==4.1.1

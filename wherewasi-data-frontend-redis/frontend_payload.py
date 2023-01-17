@@ -133,6 +133,6 @@ class FrontendPayload(object):
         if os.getenv('METADATA'):
             self.payload['metadata'] = os.getenv('METADATA')
         else:
-            logging.warning("Unable to capture metadata.")
+            logging.warning("Unable to capture metadata environment variable.")
 
         return self.payload

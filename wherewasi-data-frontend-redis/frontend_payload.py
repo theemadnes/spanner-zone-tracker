@@ -49,6 +49,19 @@ class FrontendPayload(object):
         self.redis_port = int(os.environ.get('REDIS_PORT', 6379))
         self.redis_client = redis.StrictRedis(host=self.redis_host, port=self.redis_port)
 
+        # attempt to call GCE metadata endpoint and store results - no need to call metadata endpoint every time this service gets called
+        self.gce_metadata = {}
+        r = httpx.get(METADATA_URL + '?recursive=true',
+                                headers=METADATA_HEADERS)
+        if r.status_code == 200:
+            logging.info("Successfully accessed GCE metadata endpoint.")
+            self.gce_metadata = r.json()
+        else:
+            logging.warning("Unable to access GCE metadata endpoint.")
+            self.payload['zone'] = "unknown" # default value
+
+
+
     def build_payload(self):
 
         '''
@@ -59,30 +72,24 @@ class FrontendPayload(object):
 
 
         # grab info from GCE metadata
-        try:
-            #with httpx.Client() as client:
-            r = httpx.get(METADATA_URL + '?recursive=true',
-                                headers=METADATA_HEADERS)
+        if len(self.gce_metadata):
             # get project / zone info
-            self.payload['project_id'] = r.json()['project']['projectId']
-            self.payload['zone'] = r.json()['instance']['zone'].split('/')[-1]
+            self.payload['project_id'] = self.gce_metadata['project']['projectId']
+            self.payload['zone'] = self.gce_metadata['instance']['zone'].split('/')[-1]
 
             # if we're running in GKE, we can also get cluster name
             try:
-                self.payload['cluster_name'] = r.json()['instance']['attributes']['cluster-name']
+                self.payload['cluster_name'] = self.gce_metadata['instance']['attributes']['cluster-name']
             except:
                 logging.warning("Unable to capture GKE cluster name.")
             try:
-                    self.payload['gce_instance_id'] = r.json()['instance']['id']
+                    self.payload['gce_instance_id'] = self.gce_metadata['instance']['id']
             except:
                 logging.warning("Unable to capture GCE instance ID.")
             try:
-                self.payload['gce_service_account'] = r.json()['instance']['serviceAccounts']['default']['email']
+                self.payload['gce_service_account'] = self.gce_metadata['instance']['serviceAccounts']['default']['email']
             except:
                 logging.warning("Unable to capture GCE service account.")
-        except:
-            logging.warning("Unable to access GCE metadata endpoint.")
-            self.payload['zone'] = "unknown" # default value
 
         # redis updates
         self.redis_client.incr(self.payload['zone'], 1)

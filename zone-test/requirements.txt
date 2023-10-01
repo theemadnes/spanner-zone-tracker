@@ -1,0 +1,2 @@
+google-cloud-spanner
+python-dotenv
